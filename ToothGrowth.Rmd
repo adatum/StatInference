@@ -1,0 +1,78 @@
+---
+title: "Exploring ToothGrowth data with R"
+author: "adatum"
+date: '2015-06-21'
+output: pdf_document
+---
+
+```{r echo=F}
+library(knitr)
+opts_chunk$set(tidy.opts=list(width.cutoff=80))
+```
+## Overview
+
+The `ToothGrowth` dataset in R contains results from experiments on the effects of varying doses (0.5 mg, 1 mg, 2 mg) of Vitamin C delivered by two different methods, orange juice (OJ) or ascorbic acid (VC), on the length of odontoblast cells (in micrometers) of guinea pigs' teeth.[^crampton] Each of the six cases includes 10 specimens, for a total of 60 guinea pigs. We will examine the dataset and conduct hypothesis tests on the effectiveness of the delivery methods.
+
+[^crampton]: Crampton, E. W., "The Growth of the Odontoblasts of the Incisor Tooth as a Criterion of the Vitamin C Intake of the Guinea Pig," The Journal of Nutrition, 33 (5): 491-504, 1947. 
+
+## Exploratory Data Analysis
+
+First we load the libraries needed for the analysis and take a look at the structure and summary information of the dataset, confirming that there are data for 60 guinea pigs and that the ranges of values make sense for the variables .
+
+```{r warning=F, message=F}
+library(dplyr)
+library(ggplot2)
+library(datasets)
+data(ToothGrowth)
+
+str(ToothGrowth)
+summary(ToothGrowth)
+```
+
+Before we can do hypothesis testing, we must verify whether the data meet criteria for the tests. By plotting histograms of each of the six cases in the dataset we can visually inspect the spread and calculate some summary statistics.
+
+```{r}
+tg <- ToothGrowth %>% 
+        group_by(dose, supp) %>% 
+        summarise(len.sd = round(sd(len), 2), len.mean = round(mean(len), 2))
+
+ggplot(data = ToothGrowth, aes(x = len)) + 
+        geom_dotplot(binwidth = 1) + 
+        geom_density() + 
+        facet_grid(supp ~ dose) + 
+        geom_text(x = 20, y = 0.8, 
+                  data = tg,
+                  aes(label = paste0("bar(x) == ", len.mean)),
+                  parse = T
+                  ) +
+        geom_text(x = 20, y = 0.6, 
+                  data = tg,
+                  aes(label = paste0("s == ", len.sd)),
+                  parse = T
+                  ) +
+        labs(title = "Length of tooth odontoblast cells by dose and supplement type", 
+             x = "Length [micron]", 
+             y = ""
+             ) + 
+        theme_bw()
+
+```
+
+With only 10 data points per case, it is difficult to establish whether the data are normally distributed. However, we can see that the standard deviation, and thus variance, is not necessarily similar in all cases. Therefore, we cannot assume constant variance in our tests.
+
+
+## Hypothesis Testing
+
+We will use an independent group t-test, with variance not assumed to be similar, to test the hypothesis of whether orange juice is more effective than ascorbic acid supplements. The groups are independent, since each case of the experiment was randomly assigned to a different group of 10 guinea pigs. The t-test is used, since the number of data points is small.
+
+```{r tidy=T}
+with(ToothGrowth, t.test(ToothGrowth[supp == "OJ" & dose == 0.5, "len"], ToothGrowth[supp == "VC" & dose == 0.5, "len"], alternative = "greater")[c("conf.int", "p.value")])
+with(ToothGrowth, t.test(ToothGrowth[supp == "OJ" & dose == 1, "len"], ToothGrowth[supp == "VC" & dose == 1, "len"], alternative = "greater")[c("conf.int", "p.value")])
+with(ToothGrowth, t.test(ToothGrowth[supp == "OJ" & dose == 2, "len"], ToothGrowth[supp == "VC" & dose == 2, "len"], alternative = "greater")[c("conf.int", "p.value")])
+```
+
+For the 0.5 mg and 1 mg doses, we reject the null hypothesis that the difference between the mean cell lengths for OJ and VC cases is zero. The p-values are both < 0.05 and the 95% confidence intervals do not contain zero, therefore there is a statistically significant increase in effectiveness in Vitamin C delivery by orange juice compared to ascorbic acid at these doses.
+
+However, for a dose of 2 mg, we cannot reject the null hypothesis since the p-value is > 0.05 and the confidence interval includes zero, hence there is not a statistically significant difference between the mean cell lengths for the different Vitamin C delivery methods at the 95% confidence level.
+
+In performing these t-tests, we have assumed that the data are reasonably normal. However, we cannot be confident of this due to the small number of data points. 
